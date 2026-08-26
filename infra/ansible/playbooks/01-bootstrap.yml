@@ -1,0 +1,70 @@
+---
+- name: Bootstrap inicial - criar usuário definitivo e endurecer SSH
+  hosts: k3s_cluster
+  become: true
+
+  vars:
+    new_user: halina
+    new_user_pubkey: "{{ lookup('file', '~/.ssh/id_ed25519_gitops.pub') }}"
+
+  tasks:
+    - name: Configurar rede (eth0 fixo + eth1 DHCP para internet)
+      ansible.builtin.copy:
+        dest: /etc/netplan/01-netcfg.yaml
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                dhcp4: false
+                addresses:
+                  - 192.168.56.102/24
+              eth1:
+                dhcp4: true
+        mode: '0600'
+
+    - name: Aplicar configuração de rede
+      ansible.builtin.command: netplan apply
+
+    - name: Criar usuário definitivo
+      ansible.builtin.user:
+        name: "{{ new_user }}"
+        shell: /bin/bash
+        groups: sudo
+        append: true
+        create_home: true
+
+    - name: Autorizar chave SSH nova para o usuário definitivo
+      ansible.posix.authorized_key:
+        user: "{{ new_user }}"
+        key: "{{ new_user_pubkey }}"
+        state: present
+
+    - name: Permitir sudo sem senha para o usuário definitivo
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ new_user }}"
+        content: "{{ new_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+    - name: Bloquear senha do usuário vagrant
+      ansible.builtin.user:
+        name: vagrant
+        password_lock: true
+
+    - name: Desativar login root via SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Desativar autenticação por senha via SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+
+    - name: Reiniciar SSH para aplicar mudanças
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

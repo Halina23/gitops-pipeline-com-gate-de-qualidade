@@ -1,0 +1,70 @@
+---
+- name: Instalar k3s no node
+  hosts: k3s_server
+  become: true
+
+  tasks:
+    - name: Criar diretório de configuração do k3s
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: '0755'
+
+    - name: Configurar SAN adicional para certificado TLS do k3s
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        content: |
+          tls-san:
+            - "{{ ansible_host }}"
+        mode: '0644'
+      notify: Reiniciar k3s
+
+    - name: Baixar e instalar k3s (idempotente)
+      ansible.builtin.shell: |
+        curl -4 -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Esperar o node ficar Ready
+      ansible.builtin.command: /usr/local/bin/kubectl get nodes -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}'
+      register: node_status
+      until: node_status.stdout == "True"
+      retries: 10
+      delay: 5
+      changed_when: false
+
+    - name: Buscar o kubeconfig gerado na VM
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /tmp/k3s-kubeconfig-raw.yaml
+        flat: true
+
+  handlers:
+    - name: Reiniciar k3s
+      ansible.builtin.systemd:
+        name: k3s
+        state: restarted
+
+- name: Preparar kubeconfig para acesso externo
+  hosts: localhost
+  connection: local
+  become: false
+
+  tasks:
+    - name: Criar pasta ~/.kube se não existir
+      ansible.builtin.file:
+        path: "~/.kube"
+        state: directory
+        mode: '0700'
+
+    - name: Copiar e ajustar o IP do servidor no kubeconfig
+      ansible.builtin.replace:
+        path: /tmp/k3s-kubeconfig-raw.yaml
+        regexp: '127\.0\.0\.1'
+        replace: "{{ hostvars['gitops-k3s-node']['ansible_host'] }}"
+
+    - name: Mover kubeconfig para o local final
+      ansible.builtin.copy:
+        src: /tmp/k3s-kubeconfig-raw.yaml
+        dest: "~/.kube/config-gitops"
+        mode: '0600'

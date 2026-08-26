@@ -1,0 +1,10 @@
+.env
+
+# OpenTofu/Terraform state and local plugin cache
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+
+# Vagrant box binaries and extracted contents
+*.box
+**/boxes/extracted/
