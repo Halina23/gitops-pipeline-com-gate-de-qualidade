@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-gate
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+    targetRevision: master
+    path: manifests/ai-gate
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-gate
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

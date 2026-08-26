@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gate
+  namespace: ai-gate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-gate
+  template:
+    metadata:
+      labels:
+        app: ai-gate
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "ai-gate"
+        vault.hashicorp.com/agent-inject-secret-gemini-api-key: "secret/data/ai-gate/gemini"
+        vault.hashicorp.com/agent-inject-template-gemini-api-key: |
+          {{- with secret "secret/data/ai-gate/gemini" -}}
+          {{ .Data.data.api_key }}
+          {{- end -}}
+    spec:
+      serviceAccountName: ai-gate
+      containers:
+        - name: ai-gate
+          image: ai-gate:0.1.0
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: GEMINI_API_KEY_FILE
+              value: /vault/secrets/gemini-api-key
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
