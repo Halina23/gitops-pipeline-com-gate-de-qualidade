@@ -36,8 +36,8 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 | Configuração | Ansible (rodando do WSL2) | ✅ Completo |
 | Orquestração | k3s (single-node) | ✅ Completo, `Ready` |
 | Segredos | OpenBao (KV v2 + auth Kubernetes configurados) | ✅ Completo |
-| GitOps/CD | Argo CD | 🔶 Instalado, ainda não conectado a nenhum repositório/app |
-| Gate de IA | FastAPI + Gemini | ⬜ Não iniciado |
+| GitOps/CD | Argo CD | ✅ Instalado, `Application` do ai-gate sincronizada (sync manual) |
+| Gate de IA | FastAPI + Gemini | ✅ Buildado, deployado e saudável (`/healthz` OK) |
 | Política | OPA/Conftest | ⬜ Não iniciado |
 | CI | GitHub Actions | ⬜ Não iniciado |
 
@@ -46,8 +46,9 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 - **OpenTofu**: VM `gitops-k3s-node` criada a partir de Vagrant box (`bento/ubuntu-24.04`), rede dupla (hostonly `192.168.56.102` fixo + NAT para internet), 100% reproduzível via `tofu apply`.
 - **Ansible**: usuário `halina` com chave SSH própria, SSH endurecido (sem root, sem senha), configuração de rede codificada nos playbooks.
 - **k3s**: instalado e operacional, certificado TLS com SAN correto para acesso externo, `kubectl` funcional do WSL via `KUBECONFIG=~/.kube/config-gitops`.
-- **OpenBao**: instalado via Helm chart oficial no namespace `openbao`, inicializado e destravado (unseal com 3 de 5 chaves). Secrets engine KV v2 habilitado em `secret/`, auth method Kubernetes configurado, policy de leitura `app-read` criada. Falta apenas criar o `role` vinculando a service account de um app real (ex.: o gate de IA) a essa policy — isso será feito quando esse workload existir.
-- **Argo CD**: instalado via Helm chart oficial no namespace `argocd`, todos os pods rodando. Ainda não aponta para nenhum repositório Git nem tem `Application`/`AppProject` criados.
+- **OpenBao**: instalado via Helm chart oficial (repo `openbao/openbao`) no namespace `openbao`, inicializado e destravado (unseal com 3 de 5 chaves). Secrets engine KV v2 habilitado em `secret/`, auth method Kubernetes configurado, policy de leitura `app-read` e role `ai-gate` (vinculado à service account `ai-gate`/namespace `ai-gate`) criados. Segredo real do Gemini gravado em `secret/ai-gate/gemini`. Vault Agent Injector do próprio chart cuida da injeção em `/vault/secrets/gemini-api-key`.
+- **Argo CD**: instalado via Helm chart oficial no namespace `argocd`, todos os pods rodando (exceto `argocd-applicationset-controller`, ver pendências). `Application` `ai-gate` criada (`manifests/argocd/ai-gate-application.yaml`), sincronizada manualmente (sem `syncPolicy.automated` ainda).
+- **Gate de IA (ai-gate)**: imagem `ai-gate:0.1.0` buildada localmente na própria VM do k3s e importada pro containerd via `k3s ctr -n k8s.io images import` (**atenção**: sem o `-n k8s.io` a imagem vai pro namespace errado do containerd e o kubelet não a enxerga — dá `ErrImageNeverPull`). Deployment com `imagePullPolicy: Never`, 1 réplica, rodando no namespace `ai-gate`, `/healthz` respondendo OK.
 
 ## Ambiente de desenvolvimento
 
@@ -77,6 +78,10 @@ infra/
 
 ## Notas e pendências conhecidas
 
-- Hostname do node aparece como `vagrant` em vez de algo mais descritivo (cosmético, não bloqueante).
-- Relógio interno da VM pode ficar dessincronizado após longos períodos desligada (não investigado, não bloqueante até agora).
+- Hostname do node aparece como `vagrant`/`halina-virtualbox` em vez de algo mais descritivo (cosmético, não bloqueante).
+- Relógio interno da VM fica dessincronizado após longos períodos desligada (`timedatectl` mostra `System clock synchronized: no`, NTP inativo) — já causou resultados incoerentes em `ping` durante diagnóstico de rede. Não bloqueante até agora, mas considerar habilitar NTP.
 - Senha inicial do admin do Argo CD ainda não foi trocada nem o secret `argocd-initial-admin-secret` apagado, como recomendado pela documentação oficial.
+- `argocd-applicationset-controller` está em `CrashLoopBackOff` (centenas de restarts) — não impede o uso do Argo CD para `Application`s manuais, mas precisa ser investigado.
+- O namespace `openbao` já sumiu do cluster uma vez sem explicação registrada (o cluster em si não foi recriado — nó com 52+ dias de uptime acumulado). OpenBao foi reinstalado do zero em 2026-08-26; novas chaves de unseal e root token foram geradas e estão no `.env` local.
+- `Application` do ai-gate no Argo CD ainda não tem `syncPolicy.automated` — mudanças no repositório exigem sync manual (`argocd app sync ai-gate` ou pela UI) por enquanto.
+- Helm e o CLI do Argo CD não vêm instalados na VM do k3s por padrão — foram baixados como binários avulsos em `~/.local/bin` (sem `apt`/root) durante a configuração do ai-gate.
