@@ -36,7 +36,7 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 | Configuração | Ansible (rodando do WSL2) | ✅ Completo |
 | Orquestração | k3s (single-node) | ✅ Completo, `Ready` |
 | Segredos | OpenBao (KV v2 + auth Kubernetes configurados) | ✅ Completo |
-| GitOps/CD | Argo CD | ✅ Instalado, `Application` do ai-gate sincronizada (sync manual) |
+| GitOps/CD | Argo CD | ✅ Instalado, `Application` do ai-gate com sync automático (`prune`+`selfHeal`) |
 | Gate de IA | FastAPI + Gemini | ✅ Buildado, deployado e saudável (`/healthz` OK) |
 | Política | OPA/Conftest | ⬜ Não iniciado |
 | CI | GitHub Actions | ⬜ Não iniciado |
@@ -47,7 +47,7 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 - **Ansible**: usuário `halina` com chave SSH própria, SSH endurecido (sem root, sem senha), configuração de rede codificada nos playbooks.
 - **k3s**: instalado e operacional, certificado TLS com SAN correto para acesso externo, `kubectl` funcional do WSL via `KUBECONFIG=~/.kube/config-gitops`.
 - **OpenBao**: instalado via Helm chart oficial (repo `openbao/openbao`) no namespace `openbao`, inicializado e destravado (unseal com 3 de 5 chaves). Secrets engine KV v2 habilitado em `secret/`, auth method Kubernetes configurado, policy de leitura `app-read` e role `ai-gate` (vinculado à service account `ai-gate`/namespace `ai-gate`) criados. Segredo real do Gemini gravado em `secret/ai-gate/gemini`. Vault Agent Injector do próprio chart cuida da injeção em `/vault/secrets/gemini-api-key`.
-- **Argo CD**: instalado via Helm chart oficial no namespace `argocd`, todos os pods rodando (exceto `argocd-applicationset-controller`, ver pendências). `Application` `ai-gate` criada (`manifests/argocd/ai-gate-application.yaml`), sincronizada manualmente (sem `syncPolicy.automated` ainda).
+- **Argo CD**: instalado via Helm chart oficial no namespace `argocd`, todos os pods rodando. `Application` `ai-gate` criada (`manifests/argocd/ai-gate-application.yaml`) com `syncPolicy.automated` (`prune: true`, `selfHeal: true`) — push em `manifests/ai-gate/` dispara deploy sozinho, e mudanças manuais no cluster são revertidas automaticamente.
 - **Gate de IA (ai-gate)**: imagem `ai-gate:0.1.0` buildada localmente na própria VM do k3s e importada pro containerd via `k3s ctr -n k8s.io images import` (**atenção**: sem o `-n k8s.io` a imagem vai pro namespace errado do containerd e o kubelet não a enxerga — dá `ErrImageNeverPull`). Deployment com `imagePullPolicy: Never`, 1 réplica, rodando no namespace `ai-gate`, `/healthz` respondendo OK.
 
 ## Ambiente de desenvolvimento
@@ -83,7 +83,6 @@ infra/
 - Senha inicial do admin do Argo CD ainda não foi trocada nem o secret `argocd-initial-admin-secret` apagado, como recomendado pela documentação oficial.
 - ~~`argocd-applicationset-controller` em `CrashLoopBackOff`~~ — corrigido: faltava o CRD `applicationsets.argoproj.io` no cluster (só `applications` e `appprojects` existiam). Reaplicado a partir do manifest oficial da versão instalada (`v3.4.4`).
 - O namespace `openbao` já sumiu do cluster uma vez sem explicação registrada (o cluster em si não foi recriado — nó com 52+ dias de uptime acumulado). OpenBao foi reinstalado do zero em 2026-08-26; novas chaves de unseal e root token foram geradas e estão no `.env` local.
-- `Application` do ai-gate no Argo CD ainda não tem `syncPolicy.automated` — mudanças no repositório exigem sync manual (`argocd app sync ai-gate` ou pela UI) por enquanto.
 - Helm e o CLI do Argo CD não vêm instalados na VM do k3s por padrão — foram baixados como binários avulsos em `~/.local/bin` (sem `apt`/root) durante a configuração do ai-gate.
 - **OpenBao sela de novo toda vez que a VM é reiniciada** (comportamento normal do Shamir seal, não é bug). Quando isso acontecer: destravar com 3 das chaves no `.env` (`bao operator unseal`) e depois recriar o pod do `ai-gate` (`kubectl delete pod -n ai-gate -l app=ai-gate`) em vez de esperar o backoff do `vault-agent-init` expirar.
 - **CoreDNS não relê `/etc/resolv.conf` em execução** — se a rede da VM mudar (ex.: troca de rede NAT do VirtualBox), o CoreDNS pode continuar apontando para um DNS upstream antigo e todo tráfego de saída dos pods (incluindo chamadas ao Gemini) passa a falhar com erro de resolução de nome. Sintoma: `httpx.ConnectError: Temporary failure in name resolution` nos logs do ai-gate. Fix: `kubectl delete pod -n kube-system -l k8s-app=kube-dns`.
