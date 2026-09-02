@@ -24,7 +24,7 @@ spec:
       serviceAccountName: ai-gate
       containers:
         - name: ai-gate
-          image: ai-gate:0.1.0
+          image: ai-gate:0.1.1
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
