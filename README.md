@@ -38,8 +38,8 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 | Segredos | OpenBao (KV v2 + auth Kubernetes configurados) | ✅ Completo |
 | GitOps/CD | Argo CD | ✅ Instalado, `Application` do ai-gate com sync automático (`prune`+`selfHeal`) |
 | Gate de IA | FastAPI + Gemini | ✅ Buildado, deployado e saudável (`/healthz` OK) |
-| Política | OPA/Conftest | ✅ Políticas iniciais em `policy/kubernetes.rego`, validadas contra `manifests/ai-gate/` (ainda não integrado a nenhum CI) |
-| CI | GitHub Actions | ⬜ Não iniciado |
+| Política | OPA/Conftest | ✅ Políticas em `policy/kubernetes.rego`, rodando no CI |
+| CI | GitHub Actions | ✅ `.github/workflows/quality-gate.yml`, runner self-hosted na própria VM do k3s |
 
 ### Detalhes do que já está pronto
 
@@ -48,7 +48,8 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 - **k3s**: instalado e operacional, certificado TLS com SAN correto para acesso externo, `kubectl` funcional do WSL via `KUBECONFIG=~/.kube/config-gitops`.
 - **OpenBao**: instalado via Helm chart oficial (repo `openbao/openbao`) no namespace `openbao`, inicializado e destravado (unseal com 3 de 5 chaves). Secrets engine KV v2 habilitado em `secret/`, auth method Kubernetes configurado, policy de leitura `app-read` e role `ai-gate` (vinculado à service account `ai-gate`/namespace `ai-gate`) criados. Segredo real do Gemini gravado em `secret/ai-gate/gemini`. Vault Agent Injector do próprio chart cuida da injeção em `/vault/secrets/gemini-api-key`.
 - **Argo CD**: instalado via Helm chart oficial no namespace `argocd`, todos os pods rodando. `Application` `ai-gate` criada (`manifests/argocd/ai-gate-application.yaml`) com `syncPolicy.automated` (`prune: true`, `selfHeal: true`) — push em `manifests/ai-gate/` dispara deploy sozinho, e mudanças manuais no cluster são revertidas automaticamente.
-- **Gate de IA (ai-gate)**: imagem `ai-gate:0.1.0` buildada localmente na própria VM do k3s e importada pro containerd via `k3s ctr -n k8s.io images import` (**atenção**: sem o `-n k8s.io` a imagem vai pro namespace errado do containerd e o kubelet não a enxerga — dá `ErrImageNeverPull`). Deployment com `imagePullPolicy: Never`, 1 réplica, rodando no namespace `ai-gate`, `/healthz` respondendo OK.
+- **Gate de IA (ai-gate)**: imagem buildada localmente na própria VM do k3s e importada pro containerd via `k3s ctr -n k8s.io images import` (**atenção**: sem o `-n k8s.io` a imagem vai pro namespace errado do containerd e o kubelet não a enxerga — dá `ErrImageNeverPull`). Deployment com `imagePullPolicy: Never`, 1 réplica, rodando no namespace `ai-gate`. Chamada real ao Gemini com retry/backoff (`tenacity`) pra absorver erros 503 transitórios de sobrecarga da API. Versão atual: `0.1.2`.
+- **CI (GitHub Actions)**: workflow `.github/workflows/quality-gate.yml` roda em push/PR pra `master`, em um **runner self-hosted instalado na própria VM do k3s** (não há endpoint público pro ai-gate — sem isso, o runner hospedado na nuvem do GitHub não teria como chamá-lo). Dois jobs: `policy` (Conftest contra `manifests/*/*.yaml`) e `ai-audit` (calcula o diff de `apps/` e envia pro `/audit` real do ai-gate, reprovando o job se `passed: false`). O runner acessa o ai-gate direto pelo `ClusterIP` do Service — funciona sem port-forward porque, num cluster single-node, o próprio host já tem as regras de rede do `kube-proxy`. Runner registrado como serviço systemd (`~/actions-runner`, `sudo ./svc.sh status` pra checar).
 
 ## Ambiente de desenvolvimento
 
@@ -81,15 +82,17 @@ manifests/
   argocd/       # Application do Argo CD que sincroniza manifests/ai-gate
 policy/
   kubernetes.rego  # politicas Conftest/OPA que validam os manifests Kubernetes
+.github/
+  workflows/quality-gate.yml  # CI: conftest + auditoria de IA real
 ```
 
-### Rodando as políticas do Conftest
+### Rodando as políticas do Conftest localmente
 
 ```bash
-conftest test manifests/ai-gate/*.yaml
+conftest test manifests/*/*.yaml -p policy
 ```
 
-Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa diffs de código, não o YAML final aplicado no cluster): resources.requests/limits definidos, readinessProbe/livenessProbe presentes, imagem com tag explícita (nunca `:latest`), e `metadata.namespace` definido em recursos namespaced. Roda localmente com o binário `conftest` (instalado em `~/.local/bin` na VM do k3s); ainda não está integrado a nenhum CI.
+Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa diffs de código, não o YAML final aplicado no cluster): resources.requests/limits definidos, readinessProbe/livenessProbe presentes, imagem com tag explícita (nunca `:latest`), e `metadata.namespace` definido em recursos namespaced. Isso é o mesmo comando que o job `policy` do CI roda automaticamente a cada push/PR.
 
 ## Notas e pendências conhecidas
 
@@ -102,3 +105,6 @@ Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa
 - **OpenBao sela de novo toda vez que a VM é reiniciada** (comportamento normal do Shamir seal, não é bug). Quando isso acontecer: destravar com 3 das chaves no `.env` (`bao operator unseal`) e depois recriar o pod do `ai-gate` (`kubectl delete pod -n ai-gate -l app=ai-gate`) em vez de esperar o backoff do `vault-agent-init` expirar.
 - **CoreDNS não relê `/etc/resolv.conf` em execução** — se a rede da VM mudar (ex.: troca de rede NAT do VirtualBox), o CoreDNS pode continuar apontando para um DNS upstream antigo e todo tráfego de saída dos pods (incluindo chamadas ao Gemini) passa a falhar com erro de resolução de nome. Sintoma: `httpx.ConnectError: Temporary failure in name resolution` nos logs do ai-gate. Fix: `kubectl delete pod -n kube-system -l k8s-app=kube-dns`.
 - **Nomes de modelo do Gemini mudam com frequência** — `gemini-2.0-flash` foi descontinuado e teve que ser trocado por `gemini-3.6-flash` em `apps/ai-gate/app/config.py`. Se `/audit` retornar 500, checar os logs do pod por um `ClientError 404` antes de suspeitar de outra coisa.
+- **A própria API do Gemini falha de forma transitória sob alta demanda** (`503 UNAVAILABLE`) — já aconteceu num run real do CI. Mitigado com retry/backoff em `gemini_client.py` (3 tentativas), mas se voltar a acontecer com mais frequência, considerar aumentar o número de tentativas.
+- **O CI depende de um único runner self-hosted** rodando na própria VM do k3s (`~/actions-runner`, serviço systemd `actions.runner.Halina23-*`). Se a VM estiver desligada, nenhum push/PR consegue rodar o Quality Gate — os jobs ficam na fila do GitHub até o runner voltar a ficar online. É uma limitação aceita pelo desenho atual (ai-gate não tem endpoint público), não um bug.
+- **O gate de IA pode reprovar mudanças corretas por causa da data de corte do conhecimento do modelo** — ex.: já reprovou uma correção real do próprio `GEMINI_MODEL` alegando que o novo model id "não existe", quando na verdade ele já tinha sido validado ao vivo. Uma reprovação do CI não deve ser tratada como automaticamente correta sem checar o motivo.
