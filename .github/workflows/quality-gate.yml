@@ -1,0 +1,88 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  policy:
+    name: Conftest (politicas Kubernetes)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: conftest test
+        run: ~/.local/bin/conftest test manifests/*/*.yaml -p policy
+
+  ai-audit:
+    name: Auditoria de codigo (ai-gate)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calcular diff de apps/
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.sha }}"
+            git diff "$BASE...$HEAD" -- apps/ > /tmp/pr_diff.txt
+          elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git diff HEAD~1 HEAD -- apps/ > /tmp/pr_diff.txt
+          else
+            : > /tmp/pr_diff.txt
+          fi
+          echo "bytes=$(wc -c < /tmp/pr_diff.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Enviar diff para o gate de IA
+        if: steps.diff.outputs.bytes != '0'
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          AI_GATE_IP=$(kubectl get svc ai-gate -n ai-gate -o jsonpath='{.spec.clusterIP}')
+          python3 - "$AI_GATE_IP" <<'PYEOF'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          ai_gate_ip = sys.argv[1]
+
+          with open("/tmp/pr_diff.txt") as f:
+              diff = f.read()
+
+          context = os.environ.get("PR_TITLE") or os.environ.get("COMMIT_MSG") or ""
+
+          payload = {
+              "audit_type": "code",
+              "content": diff[:20000],
+              "context": context,
+          }
+          req = urllib.request.Request(
+              f"http://{ai_gate_ip}:8000/audit",
+              data=json.dumps(payload).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=90) as resp:
+              result = json.load(resp)
+
+          print(json.dumps(result, indent=2, ensure_ascii=False))
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as sf:
+                  sf.write(f"### Auditoria de IA: {'PASSOU' if result.get('passed') else 'REPROVADO'}\n\n")
+                  sf.write(f"{result.get('summary', '')}\n\n")
+                  for issue in result.get("issues", []):
+                      sf.write(f"- **{issue.get('severity')}**: {issue.get('message')} ({issue.get('location')})\n")
+
+          if not result.get("passed", False):
+              print("::error::Gate de IA reprovou as mudancas em apps/.")
+              sys.exit(1)
+          PYEOF
