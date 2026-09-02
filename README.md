@@ -38,7 +38,7 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 | Segredos | OpenBao (KV v2 + auth Kubernetes configurados) | ✅ Completo |
 | GitOps/CD | Argo CD | ✅ Instalado, `Application` do ai-gate com sync automático (`prune`+`selfHeal`) |
 | Gate de IA | FastAPI + Gemini | ✅ Buildado, deployado e saudável (`/healthz` OK) |
-| Política | OPA/Conftest | ⬜ Não iniciado |
+| Política | OPA/Conftest | ✅ Políticas iniciais em `policy/kubernetes.rego`, validadas contra `manifests/ai-gate/` (ainda não integrado a nenhum CI) |
 | CI | GitHub Actions | ⬜ Não iniciado |
 
 ### Detalhes do que já está pronto
@@ -74,7 +74,22 @@ Credenciais geradas (unseal keys do OpenBao, root token, senha do Argo CD) ficam
 infra/
   opentofu/     # provisionamento da VM
   ansible/      # configuração do SO e instalação do k3s
+apps/
+  ai-gate/      # codigo do gate de IA (FastAPI + Gemini) e seu Dockerfile
+manifests/
+  ai-gate/      # Deployment/Service/Namespace/ServiceAccount do ai-gate
+  argocd/       # Application do Argo CD que sincroniza manifests/ai-gate
+policy/
+  kubernetes.rego  # politicas Conftest/OPA que validam os manifests Kubernetes
 ```
+
+### Rodando as políticas do Conftest
+
+```bash
+conftest test manifests/ai-gate/*.yaml
+```
+
+Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa diffs de código, não o YAML final aplicado no cluster): resources.requests/limits definidos, readinessProbe/livenessProbe presentes, imagem com tag explícita (nunca `:latest`), e `metadata.namespace` definido em recursos namespaced. Roda localmente com o binário `conftest` (instalado em `~/.local/bin` na VM do k3s); ainda não está integrado a nenhum CI.
 
 ## Notas e pendências conhecidas
 
