@@ -43,6 +43,7 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          KUBECONFIG: /home/halina/.kube/config
         run: |
           AI_GATE_IP=$(kubectl get svc ai-gate -n ai-gate -o jsonpath='{.spec.clusterIP}')
           python3 - "$AI_GATE_IP" <<'PYEOF'
