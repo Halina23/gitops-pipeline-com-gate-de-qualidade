@@ -1,11 +1,11 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AuditRequest(BaseModel):
     audit_type: Literal["code", "seo"]
-    content: str
+    content: str = Field(min_length=1)
     context: Optional[str] = None
 
 
