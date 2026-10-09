@@ -10,7 +10,7 @@ from app.schemas import AuditRequest, AuditResponse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ai-gate")
 
-app = FastAPI(title="AI Quality Gate", version="0.1.1")
+app = FastAPI(title="AI Quality Gate", version="0.1.2")
 
 _gemini_client: GeminiClient | None = None
 _startup_error: str | None = None
