@@ -96,6 +96,8 @@ Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa
 
 ## Notas e pendências conhecidas
 
+Infraestrutura real tem incidentes. Esses são os problemas reais encontrados operando esse ambiente, com a causa raiz de cada um (quando identificada) — mantidos aqui como documentação, não escondidos.
+
 - Hostname do node aparece como `vagrant`/`halina-virtualbox` em vez de algo mais descritivo (cosmético, não bloqueante).
 - ~~Relógio interno da VM dessincronizado~~ — checado em 2026-09-09: `systemd-timesyncd` está ativo, habilitado no boot e o relógio sincronizado (`System clock synchronized: yes`). O problema observado na primeira sessão parece ter sido transitório (RTC desatualizado logo após ligar a VM, antes do primeiro sync via NTP).
 - ~~Senha inicial do admin do Argo CD~~ — trocada em 2026-09-09: nova senha (bcrypt hash aplicado em `argocd-secret`), login verificado, e o secret `argocd-initial-admin-secret` apagado, como recomendado pela documentação oficial. Nova senha em `ARGOCD_ADMIN_PASSWORD` no `.env` local.
