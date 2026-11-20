@@ -1,0 +1,21 @@
+# Application raiz do ambiente AWS (padrão "app-of-apps"): aponta para a pasta
+# manifests/argocd/aws, onde ficam as Applications deste ambiente.
+# É a única peça aplicada fora do GitOps (pelo playbook 03-argocd.yml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: raiz-aws
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+    targetRevision: master
+    path: manifests/argocd/aws
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
