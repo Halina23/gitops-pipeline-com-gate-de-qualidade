@@ -10,3 +10,6 @@
 # Vagrant box binaries and extracted contents
 *.box
 **/boxes/extracted/
+
+# Inventário da AWS: gerado a cada VM (scripts/gerar-inventario-aws.sh)
+infra/ansible/inventory/aws/hosts.ini
