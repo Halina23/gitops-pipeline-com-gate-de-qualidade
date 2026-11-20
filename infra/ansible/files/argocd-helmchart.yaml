@@ -1,0 +1,19 @@
+# Instalação do Argo CD pelo helm-controller do k3s: qualquer HelmChart colocado em
+# /var/lib/rancher/k3s/server/manifests/ é instalado automaticamente (como o Traefik).
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: 10.18.2 # Argo CD v3.6.2
+  targetNamespace: argocd
+  createNamespace: true
+  valuesContent: |-
+    # Componentes não usados neste ambiente (economizam memória)
+    dex:
+      enabled: false
+    notifications:
+      enabled: false

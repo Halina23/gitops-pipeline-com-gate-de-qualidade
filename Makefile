@@ -1,6 +1,6 @@
 # Atalhos da plataforma. Rode "make" para ver a lista.
 .DEFAULT_GOAL := help
-.PHONY: help aws-check aws-up aws-inventory aws-bootstrap aws-k3s aws-all aws-ssh aws-nodes aws-status aws-down
+.PHONY: help aws-check aws-up aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-all aws-ssh aws-nodes aws-status aws-down
 
 export AWS_PROFILE ?= lab
 
@@ -34,7 +34,17 @@ aws-bootstrap: aws-inventory ## Cria o usuário definitivo e endurece o SSH
 aws-k3s: ## Instala o k3s e traz o kubeconfig para ~/.kube/config-aws
 	cd $(ANSIBLE) && ansible-playbook -i $(INV_AWS) playbooks/02-k3s-install.yml
 
-aws-all: aws-up aws-bootstrap aws-k3s aws-nodes ## Tudo: VM + bootstrap + k3s
+aws-argocd: ## Instala o Argo CD e inicia o GitOps (deploy do encurtador)
+	cd $(ANSIBLE) && ansible-playbook -i $(INV_AWS) playbooks/03-argocd.yml
+
+aws-all: aws-up aws-bootstrap aws-k3s aws-argocd aws-nodes ## Tudo: VM + bootstrap + k3s + Argo CD
+
+aws-url: ## Mostra o endereço público do encurtador
+	@echo "http://$$(tofu -chdir=$(TOFU_AWS) output -raw public_ip)/"
+
+aws-argocd-ui: ## Abre o painel do Argo CD em https://localhost:8080 (Ctrl+C encerra)
+	@echo "Usuário: admin | Senha: $$(KUBECONFIG=$(KUBECONFIG_AWS) kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
+	KUBECONFIG=$(KUBECONFIG_AWS) kubectl -n argocd port-forward svc/argocd-server 8080:443
 
 aws-ssh: ## Entra na VM como halina
 	ssh $(SSH_OPTS) halina@$$(tofu -chdir=$(TOFU_AWS) output -raw public_ip)

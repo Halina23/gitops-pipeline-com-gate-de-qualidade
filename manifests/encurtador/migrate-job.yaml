@@ -1,0 +1,44 @@
+# Migrations (alembic upgrade head), com a mesma imagem da aplicação.
+# Hook "Sync": o Argo CD apaga e recria o Job a cada sincronização
+# (um Job não pode ser alterado depois de criado), então toda versão nova
+# da aplicação roda as migrations antes de subir (onda 1, depois do banco).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: encurtador-migrate
+  namespace: encurtador
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      initContainers:
+        # Espera o banco aceitar conexões antes de migrar.
+        - name: espera-banco
+          image: postgres:18-alpine
+          command: ["sh", "-c", "until pg_isready -h encurtador-db -p 5432; do sleep 2; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+      containers:
+        - name: migrate
+          image: ghcr.io/halina23/encurtador-links:sha-c75fbd21ee5762b4458940e5f4b5f705d24ddb8e
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: encurtador-db, key: DATABASE_URL }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 256Mi }

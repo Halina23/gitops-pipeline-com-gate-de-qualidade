@@ -1,0 +1,79 @@
+---
+# Instala o Argo CD, cria o Secret do banco do encurtador (fora do Git) e a
+# Application raiz. A partir daí, o Argo CD faz o deploy a partir do Git.
+- name: Instalar Argo CD e iniciar o GitOps
+  hosts: k3s_server
+  become: true
+
+  vars:
+    files_dir: "{{ playbook_dir }}/../files"
+    kubectl: /usr/local/bin/k3s kubectl
+
+  tasks:
+    - name: Entregar o HelmChart do Argo CD ao helm-controller do k3s
+      ansible.builtin.copy:
+        src: "{{ files_dir }}/argocd-helmchart.yaml"
+        dest: /var/lib/rancher/k3s/server/manifests/argocd.yaml
+        mode: '0600'
+
+    - name: Esperar o CRD de Application existir
+      ansible.builtin.command: "{{ kubectl }} wait --for=condition=Established crd/applications.argoproj.io --timeout=10s"
+      register: crd
+      until: crd.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Esperar os componentes do Argo CD ficarem prontos
+      ansible.builtin.command: "{{ kubectl }} -n argocd rollout status {{ item }} --timeout=300s"
+      loop:
+        - deployment/argocd-repo-server
+        - deployment/argocd-server
+        - statefulset/argocd-application-controller
+      changed_when: false
+
+    - name: Criar o namespace do encurtador
+      ansible.builtin.shell: "{{ kubectl }} create namespace encurtador --dry-run=client -o yaml | {{ kubectl }} apply -f -"
+      register: ns
+      changed_when: "'created' in ns.stdout"
+
+    - name: Verificar se o Secret do banco já existe
+      ansible.builtin.command: "{{ kubectl }} -n encurtador get secret encurtador-db"
+      register: db_secret
+      failed_when: false
+      changed_when: false
+
+    # set_fact calcula a senha UMA vez. Uma variável comum seria recalculada a cada
+    # uso (avaliação preguiçosa) e geraria senhas diferentes no mesmo Secret.
+    - name: Gerar a senha do banco
+      when: db_secret.rc != 0
+      no_log: true
+      ansible.builtin.set_fact:
+        db_password: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, chars=['ascii_letters', 'digits']) }}"
+
+    # Só cria se não existir: gerar outra senha depois que o banco foi
+    # inicializado deixaria a aplicação sem acesso.
+    - name: Criar o Secret do banco com senha aleatória (não vai para o Git)
+      when: db_secret.rc != 0
+      no_log: true
+      ansible.builtin.command:
+        cmd: "{{ kubectl }} apply -f -"
+        stdin: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: encurtador-db
+            namespace: encurtador
+          type: Opaque
+          stringData:
+            POSTGRES_USER: encurtador
+            POSTGRES_DB: encurtador
+            POSTGRES_PASSWORD: "{{ db_password }}"
+            DATABASE_URL: "postgresql+psycopg://encurtador:{{ db_password }}@encurtador-db:5432/encurtador"
+
+    - name: Aplicar a Application raiz (app-of-apps)
+      ansible.builtin.command:
+        cmd: "{{ kubectl }} apply -f -"
+        stdin: "{{ lookup('ansible.builtin.file', files_dir + '/root-application-aws.yaml') }}"
+      register: root_app
+      changed_when: "'created' in root_app.stdout or 'configured' in root_app.stdout"
