@@ -32,8 +32,9 @@
         - statefulset/argocd-application-controller
       changed_when: false
 
-    - name: Criar o namespace do encurtador
-      ansible.builtin.shell: "{{ kubectl }} create namespace encurtador --dry-run=client -o yaml | {{ kubectl }} apply -f -"
+    - name: Criar os namespaces que recebem Secrets fora do Git
+      ansible.builtin.shell: "{{ kubectl }} create namespace {{ item }} --dry-run=client -o yaml | {{ kubectl }} apply -f -"
+      loop: [encurtador, observabilidade]
       register: ns
       changed_when: "'created' in ns.stdout"
 
@@ -70,6 +71,30 @@
             POSTGRES_DB: encurtador
             POSTGRES_PASSWORD: "{{ db_password }}"
             DATABASE_URL: "postgresql+psycopg://encurtador:{{ db_password }}@encurtador-db:5432/encurtador"
+
+    - name: Verificar se o Secret do admin do Grafana já existe
+      ansible.builtin.command: "{{ kubectl }} -n observabilidade get secret grafana-admin"
+      register: grafana_secret
+      failed_when: false
+      changed_when: false
+
+    # O chart do Grafana gera uma senha aleatória a cada renderização, o que deixaria
+    # o Argo CD sempre OutOfSync. Por isso a senha vem deste Secret (existingSecret).
+    - name: Criar o Secret do admin do Grafana com senha aleatória (não vai para o Git)
+      when: grafana_secret.rc != 0
+      no_log: true
+      ansible.builtin.command:
+        cmd: "{{ kubectl }} apply -f -"
+        stdin: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: grafana-admin
+            namespace: observabilidade
+          type: Opaque
+          stringData:
+            admin-user: admin
+            admin-password: "{{ lookup('ansible.builtin.password', '/dev/null', length=24, chars=['ascii_letters', 'digits']) }}"
 
     - name: Aplicar a Application raiz (app-of-apps)
       ansible.builtin.command:
