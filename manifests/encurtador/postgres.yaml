@@ -1,0 +1,74 @@
+# PostgreSQL do encurtador. A senha vem do Secret "encurtador-db",
+# criado fora do Git pelo Ansible (infra/ansible/playbooks/03-argocd.yml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: encurtador-db
+  namespace: encurtador
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    app: encurtador-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: encurtador-db
+  namespace: encurtador
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: encurtador-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: encurtador-db
+  template:
+    metadata:
+      labels:
+        app: encurtador-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: encurtador-db, key: POSTGRES_USER }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: encurtador-db, key: POSTGRES_PASSWORD }
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: { name: encurtador-db, key: POSTGRES_DB }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+  # Disco persistente (local-path do k3s): sobrevive à recriação do pod.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
