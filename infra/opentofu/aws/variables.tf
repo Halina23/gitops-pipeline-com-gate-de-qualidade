@@ -23,9 +23,10 @@ variable "public_subnet_cidr" {
 }
 
 variable "instance_type" {
-  description = "Tipo da instância EC2 (t3.large: 2 vCPU, 8 GB)"
+  # Precisa ser elegível ao plano gratuito da conta (free-tier-eligible=true).
+  description = "Tipo da instância EC2 (m7i-flex.large: 2 vCPU, 8 GB)"
   type        = string
-  default     = "t3.large"
+  default     = "m7i-flex.large"
 }
 
 variable "root_volume_size_gb" {

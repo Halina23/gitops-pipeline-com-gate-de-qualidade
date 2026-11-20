@@ -32,8 +32,12 @@ Escolhas do ambiente AWS:
 - **State remoto no S3**, com versionamento, criptografia e trava por arquivo
   (`use_lockfile`). O bucket é criado por uma configuração separada de
   bootstrap (`infra/opentofu/aws/bootstrap/`), aplicada uma única vez.
-- **EC2 `t3.large`** (2 vCPU, 8 GB, x86): roda as imagens amd64 já publicadas
-  pelo CI e comporta k3s, Argo CD, OpenBao e as aplicações.
+- **EC2 `m7i-flex.large`** (2 vCPU, 8 GB, x86): roda as imagens amd64 já
+  publicadas pelo CI e comporta k3s, Argo CD, OpenBao e as aplicações. A conta
+  está no plano gratuito, que só permite tipos elegíveis
+  (`free-tier-eligible=true`); o `t3.large`, escolhido inicialmente, foi
+  recusado. O dry-run do `RunInstances` não detecta essa restrição: a consulta
+  correta é `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true`.
 - **Rede simples:** subnet pública, **sem NAT Gateway** (custo fixo alto mesmo
   ocioso). O security group libera SSH (22) e a API do Kubernetes (6443)
   apenas para o IP de quem administra, e HTTP/HTTPS (80/443) para todos.
