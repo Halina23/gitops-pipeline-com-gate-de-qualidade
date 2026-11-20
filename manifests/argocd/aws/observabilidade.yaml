@@ -1,0 +1,39 @@
+# Observabilidade (métricas e alertas): Prometheus, Grafana, Alertmanager,
+# node-exporter e kube-state-metrics, pelo chart kube-prometheus-stack.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observabilidade
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    # 1) O chart oficial
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 93.6.0
+      helm:
+        releaseName: monitoramento
+        valueFiles:
+          - $values/manifests/observabilidade/values-kube-prometheus-stack.yaml
+    # 2) As configurações, versionadas neste repositório ($values aponta para cá)
+    - repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+      targetRevision: master
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observabilidade
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Os CRDs deste chart são grandes demais para o apply padrão (client-side).
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

@@ -1,6 +1,6 @@
 # Atalhos da plataforma. Rode "make" para ver a lista.
 .DEFAULT_GOAL := help
-.PHONY: help aws-check aws-up aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-all aws-ssh aws-nodes aws-status aws-down
+.PHONY: help aws-check aws-up aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-grafana aws-all aws-ssh aws-nodes aws-status aws-down
 
 export AWS_PROFILE ?= lab
 
@@ -52,6 +52,10 @@ aws-ssh: ## Entra na VM como halina
 aws-nodes: ## Mostra os nós e os pods do cluster
 	KUBECONFIG=$(KUBECONFIG_AWS) kubectl get nodes -o wide
 	KUBECONFIG=$(KUBECONFIG_AWS) kubectl get pods -A
+
+aws-grafana: ## Abre o Grafana em http://localhost:3000 (Ctrl+C encerra)
+	@echo "Usuário: admin | Senha: $$(KUBECONFIG=$(KUBECONFIG_AWS) kubectl -n observabilidade get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d)"
+	KUBECONFIG=$(KUBECONFIG_AWS) kubectl -n observabilidade port-forward svc/monitoramento-grafana 3000:80
 
 aws-status: ## Mostra o que existe na AWS agora (o que está custando)
 	@echo "Recursos no state: $$(tofu -chdir=$(TOFU_AWS) state list 2>/dev/null | wc -l)"
