@@ -66,5 +66,12 @@
     - name: Mover kubeconfig para o local final
       ansible.builtin.copy:
         src: /tmp/k3s-kubeconfig-raw.yaml
-        dest: "~/.kube/config-gitops"
+        # Definido por ambiente em inventory/<ambiente>/group_vars/k3s_cluster.yml
+        dest: "{{ hostvars['gitops-k3s-node']['kubeconfig_dest'] }}"
         mode: '0600'
+
+    # O arquivo temporário tem a credencial de administrador do cluster.
+    - name: Apagar o kubeconfig temporário
+      ansible.builtin.file:
+        path: /tmp/k3s-kubeconfig-raw.yaml
+        state: absent

@@ -1,0 +1,21 @@
+# Ambiente local: VM do VirtualBox criada por infra/opentofu/virtualbox.
+
+# Conexão do dia a dia (depois do bootstrap)
+ansible_user: halina
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519_gitops
+ansible_python_interpreter: /usr/bin/python3
+
+# Primeira conexão (playbook 01-bootstrap): usuário padrão da Vagrant box
+bootstrap_user: vagrant
+bootstrap_ssh_key: ~/.ssh/vagrant_insecure_key
+
+# Usuário definitivo criado pelo bootstrap
+admin_user: halina
+admin_pubkey_file: ~/.ssh/id_ed25519_gitops.pub
+
+# Rede: a VM precisa de IP fixo na rede host-only do VirtualBox
+configure_static_network: true
+static_ip_cidr: 192.168.56.102/24
+
+# Onde salvar o kubeconfig na máquina local
+kubeconfig_dest: ~/.kube/config-gitops
