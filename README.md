@@ -69,6 +69,29 @@ VBoxManage controlvm gitops-k3s-node poweroff
 
 Credenciais geradas (unseal keys do OpenBao, root token, senha do Argo CD) ficam em um arquivo `.env` na raiz do projeto, **fora do controle de versão** (`.gitignore`). Nunca commitar esse arquivo.
 
+### Ambiente AWS (efêmero)
+
+Ciclo completo com o Makefile (rode `make` para ver todos os alvos):
+
+```bash
+aws login --profile lab --remote   # se a sessão expirou
+make aws-all                        # VM + bootstrap + k3s + Argo CD (pede "yes" no apply)
+make aws-url                        # endereço público do encurtador
+make aws-grafana                    # Grafana em http://localhost:3000
+make aws-down                       # destrói tudo ao final
+```
+
+Arquivos locais exigidos pelo playbook `03-argocd.yml`, **fora do Git**, em
+`~/.config/gitops-lab/` (pasta com permissão `700`, arquivos com `600`):
+
+| Arquivo | Conteúdo |
+|---|---|
+| `alertas.yml` | `email_remetente:` e `email_destinatario:` dos alertas |
+| `gmail-app-password` | Senha de app do Gmail (16 letras), usada pelo Alertmanager para enviar os e-mails |
+
+Os demais segredos (senha do banco, admin do Grafana) são gerados aleatoriamente
+pelo Ansible a cada ambiente e também não vão para o Git.
+
 ## Estrutura do repositório
 
 ```

@@ -7,9 +7,31 @@
 
   vars:
     files_dir: "{{ playbook_dir }}/../files"
+    templates_dir: "{{ playbook_dir }}/../templates"
     kubectl: /usr/local/bin/k3s kubectl
+    # Arquivos locais da máquina de administração, fora do Git (ver README).
+    config_local: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/gitops-lab"
 
   tasks:
+    # Falha cedo, com mensagem clara, se faltar alguma configuração local.
+    - name: Conferir os arquivos locais dos alertas (e-mails e senha de app do Gmail)
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ config_local }}/{{ item }}"
+      loop: [alertas.yml, gmail-app-password]
+      register: arquivos_locais
+
+    - name: Parar se algum arquivo local estiver faltando
+      ansible.builtin.assert:
+        that: arquivos_locais.results | map(attribute='stat.exists') | min
+        fail_msg: "Faltam arquivos em {{ config_local }}: alertas.yml e gmail-app-password (ver README)."
+        quiet: true
+
+    - name: Carregar os endereços dos alertas
+      ansible.builtin.include_vars:
+        file: "{{ config_local }}/alertas.yml"
+
     - name: Entregar o HelmChart do Argo CD ao helm-controller do k3s
       ansible.builtin.copy:
         src: "{{ files_dir }}/argocd-helmchart.yaml"
@@ -95,6 +117,27 @@
           stringData:
             admin-user: admin
             admin-password: "{{ lookup('ansible.builtin.password', '/dev/null', length=24, chars=['ascii_letters', 'digits']) }}"
+
+    # Sempre aplica: se o template ou os arquivos locais mudarem, o Secret é atualizado
+    # e o Prometheus Operator recarrega a configuração do Alertmanager.
+    - name: Criar ou atualizar a configuração do Alertmanager (e-mail, fora do Git)
+      no_log: true
+      vars:
+        smtp_senha: "{{ lookup('ansible.builtin.file', config_local + '/gmail-app-password') }}"
+      ansible.builtin.command:
+        cmd: "{{ kubectl }} apply -f -"
+        stdin: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: alertmanager-monitoramento-alertmanager
+            namespace: observabilidade
+          type: Opaque
+          stringData:
+            alertmanager.yaml: |
+              {{ lookup('ansible.builtin.template', templates_dir + '/alertmanager.yaml.j2') | indent(6) }}
+      register: am_config
+      changed_when: "'created' in am_config.stdout or 'configured' in am_config.stdout"
 
     - name: Aplicar a Application raiz (app-of-apps)
       ansible.builtin.command:
