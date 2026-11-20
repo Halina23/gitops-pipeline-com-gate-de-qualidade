@@ -37,9 +37,12 @@ prometheus:
       requests: { cpu: 200m, memory: 512Mi }
       limits: { memory: 1Gi }
 
-# --- Alertmanager (configurado na etapa dos alertas no Telegram) ---
+# --- Alertmanager ---
 alertmanager:
   alertmanagerSpec:
+    # A configuração (destino por e-mail, com endereço e senha) fica num Secret
+    # criado pelo Ansible: alertmanager-monitoramento-alertmanager. O chart não a gera.
+    useExistingSecret: true
     resources:
       requests: { cpu: 10m, memory: 32Mi }
       limits: { memory: 128Mi }

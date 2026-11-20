@@ -1,0 +1,41 @@
+# Configuração do Alertmanager. Renderizada pelo playbook 03-argocd.yml num Secret
+# (alertmanager-monitoramento-alertmanager). Endereços e senha vêm de arquivos locais
+# em ~/.config/gitops-lab/, fora do Git; este template só tem a estrutura.
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: smtp.gmail.com:587
+  smtp_require_tls: true
+  smtp_from: "Alertas do encurtador <{{ email_remetente }}>"
+  smtp_auth_username: "{{ email_remetente }}"
+  smtp_auth_password: "{{ smtp_senha }}"
+
+route:
+  # Padrão: não envia. O chart traz dezenas de alertas genéricos; mandar todos por
+  # e-mail viraria spam. Eles continuam visíveis no painel do Alertmanager.
+  receiver: nulo
+  group_by: ["alertname", "namespace"]
+  group_wait: 30s      # espera alertas relacionados antes do primeiro e-mail
+  group_interval: 5m   # intervalo entre e-mails do mesmo grupo
+  repeat_interval: 4h  # reenvia se o problema continuar
+  routes:
+    - receiver: email
+      matchers: ['servico = "encurtador"']
+    - receiver: email
+      matchers: ['severity = "critical"']
+
+# Um alerta crítico ativo silencia os avisos da mesma origem.
+inhibit_rules:
+  - source_matchers: ['severity = "critical"']
+    target_matchers: ['severity = "warning"']
+    equal: ["namespace"]
+
+receivers:
+  - name: nulo
+  - name: email
+    email_configs:
+      - to: "{{ email_destinatario }}"
+        send_resolved: true
+        headers:
+{% raw %}
+          Subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} - {{ .CommonAnnotations.summary }}'
+{% endraw %}
