@@ -18,3 +18,11 @@ spec:
     automated:
       prune: true    # recurso removido do Git é removido do cluster
       selfHeal: true # mudança manual no cluster é desfeita
+    # Tenta de novo se algo falhar (ex.: o CRD do ServiceMonitor ainda não existe
+    # porque o kube-prometheus-stack está sendo instalado ao mesmo tempo).
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

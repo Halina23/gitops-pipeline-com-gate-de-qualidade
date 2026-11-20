@@ -55,6 +55,9 @@ kind: Service
 metadata:
   name: encurtador
   namespace: encurtador
+  # Label usada pelo ServiceMonitor para encontrar este Service.
+  labels:
+    app: encurtador
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:

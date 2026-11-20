@@ -1,0 +1,20 @@
+# "Prometheus, colete o /metrics do encurtador a cada 30 s."
+# Onda 3 (depois da aplicação) e SkipDryRunOnMissingResource: se o CRD de
+# ServiceMonitor ainda não existir (o kube-prometheus-stack instala), o Argo CD
+# tenta de novo depois (retry na Application) sem atrapalhar a aplicação.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: encurtador
+  namespace: encurtador
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels:
+      app: encurtador
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
