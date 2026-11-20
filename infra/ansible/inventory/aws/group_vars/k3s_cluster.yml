@@ -1,0 +1,23 @@
+# Ambiente AWS: VM EC2 criada por infra/opentofu/aws.
+# O hosts.ini deste ambiente é gerado por scripts/gerar-inventario-aws.sh (o IP muda a cada VM).
+
+# Conexão do dia a dia (depois do bootstrap)
+ansible_user: halina
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519_aws_lab
+ansible_python_interpreter: /usr/bin/python3
+# known_hosts separado: cada VM efêmera tem uma impressão digital nova
+ansible_ssh_common_args: "-o UserKnownHostsFile=~/.ssh/known_hosts_aws_lab"
+
+# Primeira conexão (playbook 01-bootstrap): usuário padrão da imagem Ubuntu na AWS
+bootstrap_user: ubuntu
+bootstrap_ssh_key: ~/.ssh/id_ed25519_aws_lab
+
+# Usuário definitivo criado pelo bootstrap
+admin_user: halina
+admin_pubkey_file: ~/.ssh/id_ed25519_aws_lab.pub
+
+# Rede: a AWS já configura a rede; alterar o netplan derrubaria o acesso
+configure_static_network: false
+
+# Onde salvar o kubeconfig na máquina local
+kubeconfig_dest: ~/.kube/config-aws
