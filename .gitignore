@@ -4,6 +4,8 @@
 **/.terraform/*
 *.tfstate
 *.tfstate.*
+# Planos salvos (tofu plan -out) podem conter valores sensíveis
+*.tfplan
 
 # Vagrant box binaries and extracted contents
 *.box
