@@ -73,8 +73,12 @@ Credenciais geradas (unseal keys do OpenBao, root token, senha do Argo CD) ficam
 
 ```
 infra/
-  opentofu/     # provisionamento da VM
+  opentofu/
+    virtualbox/ # provisionamento da VM local (VirtualBox, via PowerShell)
+    aws/        # provisionamento na AWS (VPC, rede, EC2), ambiente efêmero
   ansible/      # configuração do SO e instalação do k3s
+docs/
+  decisoes/     # ADRs (registro de decisões de arquitetura)
 apps/
   ai-gate/      # codigo do gate de IA (FastAPI + Gemini) e seu Dockerfile
 manifests/
