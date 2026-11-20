@@ -24,7 +24,9 @@ spec:
         # Espera o banco aceitar conexões antes de migrar.
         - name: espera-banco
           image: postgres:18-alpine
-          command: ["sh", "-c", "until pg_isready -h encurtador-db -p 5432; do sleep 2; done"]
+          # -U explícito: sem ele, o pg_isready usa o nome do usuário do sistema, e o UID 1000
+          # (runAsUser do pod) não existe na imagem do Postgres ("no attempt").
+          command: ["sh", "-c", "until pg_isready -h encurtador-db -p 5432 -U encurtador; do sleep 2; done"]
           resources:
             requests: { cpu: 10m, memory: 16Mi }
             limits: { cpu: 100m, memory: 64Mi }
