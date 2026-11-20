@@ -1,0 +1,20 @@
+# Application do encurtador no ambiente AWS.
+# Criada pela Application raiz (infra/ansible/files/root-application-aws.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: encurtador
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+    targetRevision: master
+    path: manifests/encurtador
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: encurtador
+  syncPolicy:
+    automated:
+      prune: true    # recurso removido do Git é removido do cluster
+      selfHeal: true # mudança manual no cluster é desfeita
