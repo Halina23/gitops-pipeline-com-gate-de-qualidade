@@ -79,6 +79,7 @@ infra/
   ansible/      # configuração do SO e instalação do k3s
 docs/
   decisoes/     # ADRs (registro de decisões de arquitetura)
+  incidentes/   # postmortems de incidentes reais e simulações (game days)
 apps/
   ai-gate/      # codigo do gate de IA (FastAPI + Gemini) e seu Dockerfile
 manifests/
@@ -97,6 +98,19 @@ conftest test manifests/*/*.yaml -p policy
 ```
 
 Valida boas práticas que o gate de IA não teria como pegar sozinho (ele revisa diffs de código, não o YAML final aplicado no cluster): resources.requests/limits definidos, readinessProbe/livenessProbe presentes, imagem com tag explícita (nunca `:latest`), e `metadata.namespace` definido em recursos namespaced. Isso é o mesmo comando que o job `policy` do CI roda automaticamente a cada push/PR.
+
+## Incidentes e simulações
+
+Problemas reais encontrados no ambiente da AWS e falhas provocadas de propósito
+(*game days*), documentados como postmortems sem culpados em
+[`docs/incidentes/`](docs/incidentes/).
+
+| # | Tipo | O que aconteceu | Causa raiz |
+|---|---|---|---|
+| [001](docs/incidentes/001-deploy-travado-nas-migrations.md) | Real | Deploy travado: Job de migrations em `Init:0/1` | `pg_isready` sem `-U` rodando com UID inexistente na imagem do Postgres; hook travando o sync do Argo CD |
+| [002](docs/incidentes/002-ssh-timeout-ip-mudou.md) | Real | Ansible com SSH em timeout no meio do provisionamento | IP público da administração mudou; security group liberava o anterior |
+| [003](docs/incidentes/003-instancia-recusada-plano-gratuito.md) | Real | EC2 recusada no `tofu apply` | Plano gratuito só aceita tipos elegíveis; o dry-run não detecta |
+| [004](docs/incidentes/004-simulacao-banco-inacessivel.md) | Simulação | Banco inacessível via NetworkPolicy | Readiness tirou o pod do tráfego sem reinícios; recuperação automática em < 10 s |
 
 ## Notas e pendências conhecidas
 
