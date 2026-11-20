@@ -1,0 +1,85 @@
+# Configurações do kube-prometheus-stack para o ambiente AWS (k3s, VM de 8 GB).
+
+# Nomes curtos: monitoramento-prometheus, monitoramento-grafana...
+fullnameOverride: monitoramento
+
+# --- Ajustes para o k3s ---
+# O k3s embute scheduler, controller-manager e etcd num único processo e não os
+# expõe como o chart espera. Monitorá-los geraria alvos "fora do ar" e alertas falsos.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    # Ambiente efêmero: não precisa guardar histórico longo.
+    retention: 2d
+    # Por padrão o Prometheus só lê ServiceMonitors com a label do release do Helm.
+    # Com "false", ele lê os de qualquer aplicação (ex.: o do encurtador).
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1Gi }
+
+# --- Alertmanager (configurado na etapa dos alertas no Telegram) ---
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+# --- Grafana ---
+grafana:
+  defaultDashboardsTimezone: browser
+  # Senha do admin num Secret criado pelo Ansible (playbook 03-argocd.yml).
+  # Sem isso, o chart gera uma senha aleatória a cada renderização: o Argo CD
+  # veria o Secret sempre diferente (OutOfSync) e a senha trocaria sozinha.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Ambiente efêmero: os dashboards vêm do Git, não de um disco do Grafana.
+  persistence:
+    enabled: false
+  sidecar:
+    dashboards:
+      enabled: true
+      # Carrega como dashboard todo ConfigMap com esta label, em qualquer namespace.
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+# --- Demais componentes ---
+prometheusOperator:
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 20m, memory: 24Mi }
+    limits: { memory: 64Mi }
