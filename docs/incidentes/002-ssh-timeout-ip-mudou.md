@@ -64,3 +64,19 @@ regras de entrada (*update in-place*), sem recriar a VM.
     sem depender do IP de origem.
 - Procedimento documentado: se SSH ou `kubectl` pararem de responder, rodar
   `tofu apply` e repetir o comando.
+
+## Recorrência e solução implementada
+
+O incidente se repetiu em 2026-11-21 (ver [006](006-teste-de-carga-limite-de-cpu.md)),
+desta vez travando o playbook por mais de 40 minutos. Implementado em seguida:
+
+- **Falhar em vez de travar:** o `ansible.cfg` passou a usar `ConnectTimeout=10`,
+  `ServerAliveInterval=15` e `ServerAliveCountMax=2`; uma conexão bloqueada é
+  abandonada em cerca de 30 segundos.
+- **Faixas extras:** além do IP atual, o security group libera as faixas listadas
+  em `~/.config/gitops-lab/admin-cidrs.txt` (arquivo local, fora do Git), com uma
+  regra por faixa (`for_each`).
+- **`make aws-ip`:** atualiza só as regras de SSH e da API do Kubernetes
+  (`apply` direcionado com `-target`).
+
+O Session Manager segue como alternativa futura, para eliminar a porta 22.
