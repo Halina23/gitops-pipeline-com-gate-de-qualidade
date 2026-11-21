@@ -7,6 +7,8 @@ data "http" "my_ip" {
 
 locals {
   admin_cidr = var.admin_cidr != "" ? var.admin_cidr : "${chomp(data.http.my_ip.response_body)}/32"
+  # IP atual + faixas extras (sem repetir): uma regra de entrada para cada item.
+  admin_cidrs = toset(concat([local.admin_cidr], var.admin_cidrs_extras))
 }
 
 resource "aws_security_group" "node" {
@@ -18,18 +20,20 @@ resource "aws_security_group" "node" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ssh_admin" {
+  for_each          = local.admin_cidrs
   security_group_id = aws_security_group.node.id
   description       = "SSH (Ansible e administracao)"
-  cidr_ipv4         = local.admin_cidr
+  cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = 22
   to_port           = 22
 }
 
 resource "aws_vpc_security_group_ingress_rule" "k8s_api_admin" {
+  for_each          = local.admin_cidrs
   security_group_id = aws_security_group.node.id
   description       = "API do Kubernetes (kubectl, helm)"
-  cidr_ipv4         = local.admin_cidr
+  cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = 6443
   to_port           = 6443

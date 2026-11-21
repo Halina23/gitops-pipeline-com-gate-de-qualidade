@@ -81,6 +81,9 @@ make aws-grafana                    # Grafana em http://localhost:3000
 make aws-down                       # destrói tudo ao final
 ```
 
+Se o SSH ou o `kubectl` pararem de responder no meio da sessão (o IP mudou), rode
+`make aws-ip`: ele atualiza só as regras do firewall.
+
 Arquivos locais exigidos pelo playbook `03-argocd.yml`, **fora do Git**, em
 `~/.config/gitops-lab/` (pasta com permissão `700`, arquivos com `600`):
 
@@ -88,6 +91,7 @@ Arquivos locais exigidos pelo playbook `03-argocd.yml`, **fora do Git**, em
 |---|---|
 | `alertas.yml` | `email_remetente:` e `email_destinatario:` dos alertas |
 | `gmail-app-password` | Senha de app do Gmail (16 letras), usada pelo Alertmanager para enviar os e-mails |
+| `admin-cidrs.txt` (opcional) | Faixas de IP extras liberadas para SSH e para a API do Kubernetes, uma por linha. Útil quando a operadora alterna o IP. Sem ele, só o IP atual é liberado. |
 
 Os demais segredos (senha do banco, admin do Grafana) são gerados aleatoriamente
 pelo Ansible a cada ambiente e também não vão para o Git.

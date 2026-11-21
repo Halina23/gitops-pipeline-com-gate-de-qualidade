@@ -1,6 +1,6 @@
 # Atalhos da plataforma. Rode "make" para ver a lista.
 .DEFAULT_GOAL := help
-.PHONY: help aws-check aws-up aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-grafana aws-all aws-ssh aws-nodes aws-status aws-down
+.PHONY: help aws-check aws-up aws-ip aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-grafana aws-all aws-ssh aws-nodes aws-status aws-down
 
 export AWS_PROFILE ?= lab
 
@@ -10,6 +10,11 @@ INV_AWS    := inventory/aws/hosts.ini
 SSH_KEY    := ~/.ssh/id_ed25519_aws_lab
 SSH_OPTS   := -i $(SSH_KEY) -o UserKnownHostsFile=~/.ssh/known_hosts_aws_lab -o StrictHostKeyChecking=accept-new
 KUBECONFIG_AWS := ~/.kube/config-aws
+
+# Faixas de IP extras liberadas no firewall (arquivo local, fora do Git; uma por linha).
+# O script converte o arquivo numa lista JSON para a variável admin_cidrs_extras do OpenTofu.
+ADMIN_CIDRS_FILE := $(HOME)/.config/gitops-lab/admin-cidrs.txt
+export TF_VAR_admin_cidrs_extras := $(shell $(ANSIBLE)/scripts/cidrs-para-json.sh $(ADMIN_CIDRS_FILE))
 
 help: ## Mostra esta ajuda
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -21,6 +26,13 @@ aws-check: ## Confere o login da AWS (se expirou: aws login --profile lab --remo
 
 aws-up: aws-check ## Cria rede e VM na AWS (mostra o plano e pede "yes")
 	tofu -chdir=$(TOFU_AWS) apply
+
+# Apply direcionado (-target): só as regras de SSH e da API do Kubernetes mudam.
+aws-ip: aws-check ## Atualiza o firewall com o seu IP atual (use se o SSH ou o kubectl pararem)
+	tofu -chdir=$(TOFU_AWS) apply -auto-approve \
+		-target=aws_vpc_security_group_ingress_rule.ssh_admin \
+		-target=aws_vpc_security_group_ingress_rule.k8s_api_admin
+	@echo "Faixas liberadas: $$(tofu -chdir=$(TOFU_AWS) output -json admin_cidrs)"
 
 aws-inventory: ## Gera o inventário do Ansible com o IP da VM
 	$(ANSIBLE)/scripts/gerar-inventario-aws.sh

@@ -14,6 +14,11 @@ output "ssh_command" {
 }
 
 output "admin_cidr" {
-  description = "IP liberado para SSH e para a API do Kubernetes"
+  description = "IP atual de quem rodou o tofu"
   value       = local.admin_cidr
+}
+
+output "admin_cidrs" {
+  description = "Todas as faixas liberadas para SSH e para a API do Kubernetes"
+  value       = sort(tolist(local.admin_cidrs))
 }

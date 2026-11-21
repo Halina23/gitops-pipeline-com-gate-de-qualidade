@@ -49,3 +49,18 @@ variable "admin_cidr" {
   type        = string
   default     = ""
 }
+
+variable "admin_cidrs_extras" {
+  description = <<-EOT
+    Faixas extras liberadas para SSH e para a API do Kubernetes (ex.: as faixas que a
+    operadora alterna). Vêm de ~/.config/gitops-lab/admin-cidrs.txt pelo Makefile
+    (TF_VAR_admin_cidrs_extras), fora do Git.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.admin_cidrs_extras : can(cidrhost(c, 0))])
+    error_message = "Cada item de admin_cidrs_extras precisa ser um CIDR IPv4 válido (ex.: 203.0.113.0/24)."
+  }
+}
