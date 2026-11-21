@@ -23,7 +23,7 @@ spec:
         runAsGroup: 1000
       containers:
         - name: encurtador
-          image: ghcr.io/halina23/encurtador-links:sha-c75fbd21ee5762b4458940e5f4b5f705d24ddb8e
+          image: ghcr.io/halina23/encurtador-links:sha-f0c46d56ec9abf2af617555e78c16a6007159e46
           ports:
             - name: http
               containerPort: 8000
@@ -34,6 +34,11 @@ spec:
             - name: LOG_LEVEL
               value: INFO
             # BASE_URL vazio: os links curtos usam o endereço da requisição.
+            # Traces (OpenTelemetry): enviados ao Alloy, que repassa ao Tempo.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://alloy.observabilidade.svc:4318
+            - name: OTEL_SERVICE_NAME
+              value: encurtador
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }
