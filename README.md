@@ -135,6 +135,7 @@ Problemas reais encontrados no ambiente da AWS e falhas provocadas de propósito
 | [003](docs/incidentes/003-instancia-recusada-plano-gratuito.md) | Real | EC2 recusada no `tofu apply` | Plano gratuito só aceita tipos elegíveis; o dry-run não detecta |
 | [004](docs/incidentes/004-simulacao-banco-inacessivel.md) | Simulação | Banco inacessível via NetworkPolicy | Readiness tirou o pod do tráfego sem reinícios; recuperação automática em < 10 s |
 | [005](docs/incidentes/005-simulacao-alerta-por-email.md) | Simulação | Alerta de ponta a ponta: banco inacessível → e-mail | E-mail de alerta em ~2 min 20 s e de resolução após a recuperação; 0 falhas de envio |
+| [006](docs/incidentes/006-teste-de-carga-limite-de-cpu.md) | Simulação | Teste de carga com k6 (até 150 usuários) | Pod saturou em ~113 req/s pelo `limits.cpu` de 500m (47% de throttling); latência subiu, 0 falhas |
 
 ## Notas e pendências conhecidas
 
