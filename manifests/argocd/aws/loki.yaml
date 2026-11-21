@@ -1,0 +1,35 @@
+# Loki: guarda e busca os logs (modo SingleBinary).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.7.0
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/manifests/observabilidade/values-loki.yaml
+    - repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+      targetRevision: master
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observabilidade
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
