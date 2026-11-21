@@ -1,0 +1,27 @@
+# Tempo: guarda e busca os traces (manifestos próprios em manifests/tempo).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Halina23/gitops-pipeline-com-gate-de-qualidade.git
+    targetRevision: master
+    path: manifests/tempo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observabilidade
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
