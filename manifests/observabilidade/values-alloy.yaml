@@ -1,0 +1,66 @@
+# Grafana Alloy: coleta os logs dos pods e envia ao Loki.
+# Um único pod (Deployment) lendo os logs pela API do Kubernetes (como o
+# "kubectl logs"). Num cluster com muitos nós, o recomendado seria um DaemonSet
+# lendo os arquivos de log de cada nó.
+controller:
+  type: deployment
+  replicas: 1
+
+alloy:
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { memory: 256Mi }
+  configMap:
+    content: |
+      // 1) Descobre os pods do cluster.
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // 2) Escolhe as labels dos logs. Poucos valores possíveis (baixa cardinalidade):
+      //    request_id e afins ficam no conteúdo e são filtrados na consulta (LogQL).
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+      }
+
+      // 3) Lê os logs dos pods pela API do Kubernetes.
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.nivel.receiver]
+      }
+
+      // 4) Nos logs em JSON (como os do encurtador), transforma o campo "level"
+      //    em label (INFO, WARNING, ERROR...). Linhas que não são JSON passam direto.
+      loki.process "nivel" {
+        stage.json {
+          expressions = { level = "level" }
+        }
+        stage.labels {
+          values = { level = "" }
+        }
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      // 5) Envia ao Loki.
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki.observabilidade.svc:3100/loki/api/v1/push"
+        }
+      }

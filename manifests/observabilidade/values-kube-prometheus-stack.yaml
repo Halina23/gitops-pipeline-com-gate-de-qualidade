@@ -60,6 +60,15 @@ grafana:
   # Ambiente efêmero: os dashboards vêm do Git, não de um disco do Grafana.
   persistence:
     enabled: false
+  # Loki como fonte de dados de logs (o Prometheus já vem configurado pelo chart).
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.observabilidade.svc:3100
+      jsonData:
+        maxLines: 1000
   sidecar:
     dashboards:
       enabled: true

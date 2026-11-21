@@ -458,6 +458,39 @@ data:
               "legendFormat": "em andamento"
             }
           ]
+        },
+        {
+          "id": 9,
+          "type": "logs",
+          "title": "Logs da aplicação (Loki)",
+          "description": "Logs JSON do encurtador no mesmo período dos gráficos. As probes e o /metrics não geram log (QUIET_PATHS).",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 20
+          },
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "sortOrder": "Descending",
+            "enableLogDetails": true
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "expr": "{namespace=\"encurtador\", container=\"encurtador\"}"
+            }
+          ]
         }
       ]
     }
