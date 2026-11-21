@@ -1,0 +1,150 @@
+# Grafana Tempo: guarda e busca os traces (modo monolítico, um único processo).
+#
+# Manifestos próprios em vez de chart Helm: os charts do Tempo foram descontinuados
+# na versão 3 e o modo monolítico precisa só de configuração + StatefulSet + Service.
+# No modo monolítico o Tempo 3 não precisa de Kafka (só o modo distribuído precisa).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo
+  namespace: observabilidade
+data:
+  tempo.yaml: |
+    stream_over_http_enabled: true
+
+    server:
+      http_listen_port: 3200
+      log_level: info
+
+    # Recebe os traces por OTLP (vindos do Alloy). 0.0.0.0: aceita conexões de
+    # fora do pod (o padrão é escutar só no localhost).
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: "0.0.0.0:4317"
+            http:
+              endpoint: "0.0.0.0:4318"
+
+    # Traces no disco do próprio pod (o backend "local" só existe no modo monolítico).
+    storage:
+      trace:
+        backend: local
+        wal:
+          path: /var/tempo/wal
+        local:
+          path: /var/tempo/blocks
+
+    # Retenção de 48h, igual à do Loki. Na versão 3 ela fica no agendador
+    # (backend_scheduler) e no executor (backend_worker) das tarefas de limpeza.
+    backend_scheduler:
+      provider:
+        compaction:
+          compaction:
+            block_retention: 48h
+    backend_worker:
+      compaction:
+        block_retention: 48h
+
+    usage_report:
+      reporting_enabled: false
+---
+# StatefulSet (e não Deployment): o Tempo guarda dados, então precisa de um disco
+# próprio que continue o mesmo se o pod for recriado.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  namespace: observabilidade
+spec:
+  serviceName: tempo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+      annotations:
+        # Muda quando a configuração muda: o pod é recriado e lê o ConfigMap novo.
+        config/versao: "1"
+    spec:
+      # A imagem do Tempo roda com o usuário 10001. fsGroup: o disco pertence a
+      # esse grupo, para o Tempo conseguir gravar nele.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          # Tag + digest: a versão legível e a garantia de que a imagem é exatamente esta.
+          image: grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044
+          args:
+            - -target=all
+            - -config.file=/etc/tempo/tempo.yaml
+          ports:
+            - name: http
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+              readOnly: true
+            - name: dados
+              mountPath: /var/tempo
+      volumes:
+        - name: config
+          configMap:
+            name: tempo
+  # Um disco (PVC) por pod, criado automaticamente. Some no destroy, como os
+  # dados do Prometheus e do Loki.
+  volumeClaimTemplates:
+    - metadata:
+        name: dados
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: observabilidade
+  labels:
+    app: tempo
+spec:
+  selector:
+    app: tempo
+  ports:
+    - name: http       # API de busca, usada pelo Grafana
+      port: 3200
+      targetPort: http
+    - name: otlp-grpc  # recebe traces (usado pelo Alloy)
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

@@ -1,4 +1,5 @@
-# Grafana Alloy: coleta os logs dos pods e envia ao Loki.
+# Grafana Alloy: coleta os logs dos pods e envia ao Loki, e recebe os traces
+# das aplicações (OTLP) e envia ao Tempo.
 # Um único pod (Deployment) lendo os logs pela API do Kubernetes (como o
 # "kubectl logs"). Num cluster com muitos nós, o recomendado seria um DaemonSet
 # lendo os arquivos de log de cada nó.
@@ -10,6 +11,17 @@ alloy:
   resources:
     requests: { cpu: 50m, memory: 96Mi }
     limits: { memory: 256Mi }
+  # Portas extras no pod e no Service "alloy": as aplicações enviam os traces
+  # para http://alloy.observabilidade.svc:4318 (OTLP/HTTP) ou :4317 (OTLP/gRPC).
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
   configMap:
     content: |
       // 1) Descobre os pods do cluster.
@@ -62,5 +74,37 @@ alloy:
       loki.write "loki" {
         endpoint {
           url = "http://loki.observabilidade.svc:3100/loki/api/v1/push"
+        }
+      }
+
+      // --- Traces ---
+
+      // 6) Recebe os traces das aplicações por OTLP.
+      otelcol.receiver.otlp "apps" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.processor.batch.traces.input]
+        }
+      }
+
+      // 7) Junta os spans em lotes antes de enviar (menos conexões, menos CPU).
+      otelcol.processor.batch "traces" {
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // 8) Envia ao Tempo por OTLP/gRPC. Sem TLS: o tráfego não sai do cluster.
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.observabilidade.svc:4317"
+          tls {
+            insecure = true
+          }
         }
       }

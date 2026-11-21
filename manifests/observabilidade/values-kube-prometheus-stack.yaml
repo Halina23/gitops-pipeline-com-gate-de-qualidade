@@ -60,7 +60,9 @@ grafana:
   # Ambiente efêmero: os dashboards vêm do Git, não de um disco do Grafana.
   persistence:
     enabled: false
-  # Loki como fonte de dados de logs (o Prometheus já vem configurado pelo chart).
+  # Loki (logs) e Tempo (traces) como fontes de dados. O Prometheus já vem
+  # configurado pelo chart. "$$" escapa o "$": o Grafana trocaria "${...}" por uma
+  # variável de ambiente ao carregar o arquivo.
   additionalDataSources:
     - name: Loki
       type: loki
@@ -69,6 +71,31 @@ grafana:
       url: http://loki.observabilidade.svc:3100
       jsonData:
         maxLines: 1000
+        # Log -> trace: acha o trace_id no log JSON e vira um botão que abre o
+        # trace no Tempo.
+        derivedFields:
+          - name: trace_id
+            matcherRegex: '"trace_id": "([0-9a-f]{32})"'
+            datasourceUid: tempo
+            url: "$${__value.raw}"
+            urlDisplayLabel: Ver trace no Tempo
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo.observabilidade.svc:3200
+      jsonData:
+        # Trace -> logs: num span, o botão "Logs for this span" busca no Loki os
+        # logs com aquele trace_id. A tag service.name (encurtador) vira a label
+        # app do Loki, que tem o mesmo valor.
+        tracesToLogsV2:
+          datasourceUid: loki
+          filterByTraceID: true
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          tags:
+            - key: service.name
+              value: app
   sidecar:
     dashboards:
       enabled: true
