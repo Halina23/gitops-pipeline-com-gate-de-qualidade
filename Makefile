@@ -58,8 +58,12 @@ aws-grafana: ## Abre o Grafana em http://localhost:3000 (Ctrl+C encerra)
 	KUBECONFIG=$(KUBECONFIG_AWS) kubectl -n observabilidade port-forward svc/monitoramento-grafana 3000:80
 
 aws-status: ## Mostra o que existe na AWS agora (o que está custando)
-	@echo "Recursos no state: $$(tofu -chdir=$(TOFU_AWS) state list 2>/dev/null | wc -l)"
-	@echo "Instâncias ligadas: $$(aws ec2 describe-instances --filters Name=tag:Project,Values=gitops-pipeline Name=instance-state-name,Values=pending,running,stopping,stopped --query 'length(Reservations[].Instances[])' --output text)"
+	@# Falha com mensagem clara se não conseguir consultar (ex.: login expirado),
+	@# em vez de exibir 0 e dar a falsa impressão de que nada está ligado.
+	@ESTADO=$$(tofu -chdir=$(TOFU_AWS) state list 2>/dev/null) || { echo "ERRO: não consegui ler o state. Login expirado? Rode: aws login --profile lab --remote"; exit 1; }; \
+	echo "Recursos no state: $$(printf '%s\n' "$$ESTADO" | grep -v '^data\.' | grep -c .)"
+	@INST=$$(aws ec2 describe-instances --filters Name=tag:Project,Values=gitops-pipeline Name=instance-state-name,Values=pending,running,stopping,stopped --query 'length(Reservations[].Instances[])' --output text 2>/dev/null) || { echo "ERRO: não consegui consultar a AWS. Login expirado? Rode: aws login --profile lab --remote"; exit 1; }; \
+	echo "Instâncias ligadas: $$INST"
 
 aws-down: aws-check ## Destrói tudo na AWS (mostra a lista e pede "yes")
 	tofu -chdir=$(TOFU_AWS) destroy
