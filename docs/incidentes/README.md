@@ -13,6 +13,7 @@ no ambiente efêmero da AWS para validar o comportamento da plataforma.
 | [004](004-simulacao-banco-inacessivel.md) | Simulação | Banco de dados inacessível | Página fora do ar (503) | ~1 min |
 | [005](005-simulacao-alerta-por-email.md) | Simulação | Alerta de ponta a ponta: banco inacessível → e-mail | Página fora do ar (503) | ~2 min |
 | [006](006-teste-de-carga-limite-de-cpu.md) | Simulação | Teste de carga (k6): limite de CPU do pod como gargalo | Latência alta no pico, sem falhas | ~8 min |
+| [007](007-ambiente-esquecido-ligado.md) | Real | Ambiente efêmero esquecido ligado | ~US$ 4–5 de créditos, sem cobrança real | ~42 h |
 
 ## Formato de cada registro
 
