@@ -40,6 +40,7 @@ Dev push → Git → CI (GitHub Actions) → Gate de IA (FastAPI + Gemini) → O
 | Gate de IA | FastAPI + Gemini | ✅ Buildado, deployado e saudável (`/healthz` OK) |
 | Política | OPA/Conftest | ✅ Políticas em `policy/kubernetes.rego`, rodando no CI |
 | CI | GitHub Actions | ✅ `.github/workflows/quality-gate.yml`, runner self-hosted na própria VM do k3s |
+| Observabilidade (AWS) | Prometheus, Grafana, Alertmanager (e-mail), Loki + Alloy (logs), Tempo + OpenTelemetry (traces) | ✅ Métricas, logs e traces ligados entre si no Grafana (log → trace → logs pelo `trace_id`) |
 
 ### Detalhes do que já está pronto
 
@@ -111,7 +112,10 @@ apps/
   ai-gate/      # codigo do gate de IA (FastAPI + Gemini) e seu Dockerfile
 manifests/
   ai-gate/      # Deployment/Service/Namespace/ServiceAccount do ai-gate
-  argocd/       # Application do Argo CD que sincroniza manifests/ai-gate
+  argocd/       # Applications do Argo CD (aws/: as do ambiente AWS, app-of-apps)
+  encurtador/   # encurtador de links: app, Postgres, migrations, dashboard, alertas
+  observabilidade/ # values dos charts: kube-prometheus-stack, Loki, Alloy
+  tempo/        # Tempo (traces), com manifestos próprios
 policy/
   kubernetes.rego  # politicas Conftest/OPA que validam os manifests Kubernetes
 .github/
@@ -140,6 +144,7 @@ Problemas reais encontrados no ambiente da AWS e falhas provocadas de propósito
 | [004](docs/incidentes/004-simulacao-banco-inacessivel.md) | Simulação | Banco inacessível via NetworkPolicy | Readiness tirou o pod do tráfego sem reinícios; recuperação automática em < 10 s |
 | [005](docs/incidentes/005-simulacao-alerta-por-email.md) | Simulação | Alerta de ponta a ponta: banco inacessível → e-mail | E-mail de alerta em ~2 min 20 s e de resolução após a recuperação; 0 falhas de envio |
 | [006](docs/incidentes/006-teste-de-carga-limite-de-cpu.md) | Simulação | Teste de carga com k6 (até 150 usuários) | Pod saturou em ~113 req/s pelo `limits.cpu` de 500m (47% de throttling); latência subiu, 0 falhas |
+| [007](docs/incidentes/007-ambiente-esquecido-ligado.md) | Real | Ambiente efêmero ficou ~42 h ligado sem uso | Sessão interrompida pulou o `destroy`; o budget exclui créditos e nada desliga sozinho |
 
 ## Notas e pendências conhecidas
 
