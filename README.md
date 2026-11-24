@@ -97,6 +97,12 @@ make aws-tempo       # quanto falta para a VM se encerrar
 make aws-prorrogar   # recomeça a contagem: mais 4 h a partir de agora
 ```
 
+**Alertas de custo** (permanentes, fora do ciclo efêmero): o budget
+`alerta-gasto-zero` avisa se algo for cobrado além dos créditos, e o
+`uso-dos-creditos` (código em `infra/opentofu/aws/bootstrap/budgets.tf`) avisa
+quando o uso bruto passa de 50% e 100% de US$ 10 no mês, ou quando a previsão
+indica que vai passar. O e-mail vem de `~/.config/gitops-lab/alertas.yml`.
+
 Arquivos locais exigidos pelo playbook `03-argocd.yml`, **fora do Git**, em
 `~/.config/gitops-lab/` (pasta com permissão `700`, arquivos com `600`):
 

@@ -64,9 +64,13 @@ Explorer atualiza com até 24h de atraso, então o total final fica um pouco aci
   prática, ela seria recriada de qualquer jeito. `make aws-tempo` mostra quanto
   falta e `make aws-prorrogar` recomeça a contagem. Testado com o timer em 10
   minutos: a prorrogação moveu o disparo e a VM se encerrou sozinha no horário.
-- **Proposto:** um segundo budget que conte o uso **bruto** (antes dos créditos),
-  com aviso por e-mail a partir de ~US$ 10 no mês. Assim o consumo dos créditos
-  também fica visível.
+- **Feito:** um segundo budget, `uso-dos-creditos`, que conta o uso **bruto**
+  (só as linhas `RECORD_TYPE = Usage` da fatura, antes dos créditos), com teto de
+  US$ 10 no mês e avisos por e-mail em 50%, em 100% e na **previsão** de passar
+  de 100%. Criado pela AWS CLI e trazido para o OpenTofu
+  (`infra/opentofu/aws/bootstrap/budgets.tf`) com um bloco `import`. O `plan` do
+  import revelou que os avisos tinham ido para o e-mail errado, corrigido no
+  apply. Ao ser criado, ele já mostrou US$ 4,98 de uso bruto em novembro.
 - **Aprendizado:** um alerta que exclui créditos protege o cartão, mas não os
   créditos. Cada alerta responde a uma pergunta diferente, e "quanto estou
   consumindo?" precisava do seu próprio alerta.
