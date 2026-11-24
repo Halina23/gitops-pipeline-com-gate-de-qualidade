@@ -13,6 +13,11 @@ output "ssh_command" {
   value       = "ssh -i ~/.ssh/id_ed25519_aws_lab ubuntu@${aws_instance.k3s_node.public_ip}"
 }
 
+output "auto_desligar_minutos" {
+  description = "Minutos, a partir do boot, até a VM se encerrar sozinha"
+  value       = local.auto_desligar_minutos
+}
+
 output "admin_cidr" {
   description = "IP atual de quem rodou o tofu"
   value       = local.admin_cidr

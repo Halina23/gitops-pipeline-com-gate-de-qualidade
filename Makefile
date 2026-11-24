@@ -1,6 +1,6 @@
 # Atalhos da plataforma. Rode "make" para ver a lista.
 .DEFAULT_GOAL := help
-.PHONY: help aws-check aws-up aws-ip aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-grafana aws-all aws-ssh aws-nodes aws-status aws-down
+.PHONY: help aws-check aws-up aws-ip aws-inventory aws-bootstrap aws-k3s aws-argocd aws-url aws-argocd-ui aws-grafana aws-all aws-ssh aws-tempo aws-prorrogar aws-nodes aws-status aws-down
 
 export AWS_PROFILE ?= lab
 
@@ -60,6 +60,16 @@ aws-argocd-ui: ## Abre o painel do Argo CD em https://localhost:8080 (Ctrl+C enc
 
 aws-ssh: ## Entra na VM como halina
 	ssh $(SSH_OPTS) halina@$$(tofu -chdir=$(TOFU_AWS) output -raw public_ip)
+
+# Desligamento automático (incidente 007): a VM se encerra sozinha depois de
+# auto_desligar_horas (padrão 4). O timer roda dentro da própria VM.
+aws-tempo: ## Mostra quanto falta para a VM se encerrar sozinha
+	@ssh $(SSH_OPTS) halina@$$(tofu -chdir=$(TOFU_AWS) output -raw public_ip) \
+		systemctl list-timers auto-desligar.timer --no-pager
+
+aws-prorrogar: ## Recomeça a contagem do desligamento automático (mais 4 h a partir de agora)
+	@ssh $(SSH_OPTS) halina@$$(tofu -chdir=$(TOFU_AWS) output -raw public_ip) \
+		'sudo systemctl restart auto-desligar.timer && systemctl list-timers auto-desligar.timer --no-pager'
 
 aws-nodes: ## Mostra os nós e os pods do cluster
 	KUBECONFIG=$(KUBECONFIG_AWS) kubectl get nodes -o wide

@@ -1,0 +1,37 @@
+#cloud-config
+# Desligamento automático da VM (incidente 007: ambiente esquecido ligado).
+#
+# Roda no primeiro boot, pelo cloud-init. Cria um timer do systemd que desliga a
+# VM ${minutos} minutos depois de ativado. Como a instância tem
+# instance_initiated_shutdown_behavior = "terminate", desligar = encerrar: a VM e
+# o disco são apagados e o custo vai a zero.
+#
+# OnActiveSec conta a partir da ativação do timer, então "systemctl restart
+# auto-desligar.timer" recomeça a contagem (é o que o "make aws-prorrogar" faz).
+write_files:
+  - path: /etc/systemd/system/auto-desligar.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Desliga a VM do ambiente efêmero
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/systemctl poweroff
+
+  - path: /etc/systemd/system/auto-desligar.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Desliga a VM ${minutos} minutos depois de ativado
+
+      [Timer]
+      OnActiveSec=${minutos}min
+      AccuracySec=1min
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, auto-desligar.timer]

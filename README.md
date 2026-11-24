@@ -85,6 +85,18 @@ make aws-down                       # destrói tudo ao final
 Se o SSH ou o `kubectl` pararem de responder no meio da sessão (o IP mudou), rode
 `make aws-ip`: ele atualiza só as regras do firewall.
 
+**Desligamento automático:** a VM se encerra sozinha **4 horas depois do boot**
+(variável `auto_desligar_horas`), mesmo que ninguém rode o `aws-down`. Um timer
+do systemd, criado pelo cloud-init, desliga o sistema, e com
+`instance_initiated_shutdown_behavior = "terminate"` a AWS apaga a VM e o disco.
+Rede e firewall continuam no state (não custam nada) até o próximo `aws-down`.
+Proteção criada depois do [incidente 007](docs/incidentes/007-ambiente-esquecido-ligado.md).
+
+```bash
+make aws-tempo       # quanto falta para a VM se encerrar
+make aws-prorrogar   # recomeça a contagem: mais 4 h a partir de agora
+```
+
 Arquivos locais exigidos pelo playbook `03-argocd.yml`, **fora do Git**, em
 `~/.config/gitops-lab/` (pasta com permissão `700`, arquivos com `600`):
 
