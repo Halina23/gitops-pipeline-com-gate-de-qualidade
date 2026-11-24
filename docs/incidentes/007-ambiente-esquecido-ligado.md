@@ -55,10 +55,15 @@ Explorer atualiza com até 24h de atraso, então o total final fica um pouco aci
 - **Feito:** ao retomar qualquer sessão, o primeiro passo é conferir o ambiente
   (`make aws-status`; se o login expirou, `kubectl get nodes` com o kubeconfig da
   AWS) e destruí-lo se não estiver em uso.
-- **Proposto:** desligamento automático da VM depois de algumas horas (ex.:
-  `shutdown -h +240` agendado na inicialização, com
-  `instance_initiated_shutdown_behavior = "stop"`). Uma VM parada não cobra CPU
-  nem IP público; só o disco continua sendo cobrado, em centavos.
+- **Feito:** desligamento automático da VM 4 horas depois do boot. O cloud-init
+  cria um timer do systemd que desliga o sistema, e a instância tem
+  `instance_initiated_shutdown_behavior = "terminate"`: a AWS apaga a VM e o
+  disco, e o custo vai a zero. Foi escolhido `terminate` em vez de `stop` porque
+  uma VM parada continua cobrando o disco, e ao religar volta com outro IP
+  público, o que quebra o certificado do k3s, o kubeconfig e o inventário. Na
+  prática, ela seria recriada de qualquer jeito. `make aws-tempo` mostra quanto
+  falta e `make aws-prorrogar` recomeça a contagem. Testado com o timer em 10
+  minutos: a prorrogação moveu o disparo e a VM se encerrou sozinha no horário.
 - **Proposto:** um segundo budget que conte o uso **bruto** (antes dos créditos),
   com aviso por e-mail a partir de ~US$ 10 no mês. Assim o consumo dos créditos
   também fica visível.
