@@ -35,6 +35,21 @@ variable "root_volume_size_gb" {
   default     = 30
 }
 
+variable "auto_desligar_horas" {
+  description = <<-EOT
+    Horas até a VM se encerrar sozinha (contadas a partir do boot). Proteção
+    contra ambiente esquecido ligado (incidente 007). "make aws-prorrogar"
+    recomeça a contagem. Aceita frações para testes (ex.: 0.17 = 10 minutos).
+  EOT
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.auto_desligar_horas >= 0.1 && var.auto_desligar_horas <= 24
+    error_message = "auto_desligar_horas precisa estar entre 0.1 (6 minutos) e 24."
+  }
+}
+
 variable "ssh_public_key_path" {
   description = "Chave SSH pública colocada na VM"
   type        = string
